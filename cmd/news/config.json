@@ -1,0 +1,9 @@
+{
+    "links": [
+        "https://rssexport.rbc.ru/rbcnews/news/10/full.rss",
+        "https://russian.rt.com/rss",
+        "https://lenta.ru/rss",
+        "https://tass.ru/rss/v2.xml"
+    ],
+    "survey_period": 10
+}
