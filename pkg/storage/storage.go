@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"time"
@@ -8,12 +9,13 @@ import (
 
 // Storage - контракт на работу с БД
 type Storage interface {
-	Item(id int) (Item, error)   // Получить новость по id
-	Items(n int) ([]Item, error) // Получить все новости списком
-	AddItem(Item) error          // Добавить новость
-	DeleteItem(Item) error       // Удалить новость
-	UpdateItem(Item) error       // Обновить новость
-	Close() error                // закрыть БД
+	Item(ctx context.Context, link string) (Item, error) // Получить новость по ссылке
+	Items(ctx context.Context, n int) ([]Item, error)    // Получить все новости списком
+	AddItem(context.Context, Item) error                 // Добавить новость
+	AddItems(context.Context, []Item) error              // Добавить новости списком
+	DeleteItem(context.Context, Item) error              // Удалить новость
+	UpdateItem(context.Context, Item) error              // Обновить новость
+	Close() error                                        // закрыть БД
 }
 
 // Item - модель данных rss-новости
