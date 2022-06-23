@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS news (
     title TEXT NOT NULL,
 	description TEXT,
     pub_date BIGINT CHECK(pub_date > 0) DEFAULT extract(epoch from now()),
-    link TEXT NOT NULL
+    link TEXT UNIQUE
 );

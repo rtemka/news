@@ -94,7 +94,8 @@ func (p *Postgres) Items(ctx context.Context, n int) ([]storage.Item, error) {
 	return items, rows.Err()
 }
 
-// AddItems добавляет в БД слайс rss-новостей
+// AddItems добавляет в БД слайс rss-новостей,
+// ингорирует те новости, что уже есть в БД
 func (p *Postgres) AddItems(ctx context.Context, items []storage.Item) error {
 	return p.addItemsByBatch(ctx, items)
 }
@@ -109,7 +110,8 @@ func (p *Postgres) addItemsByBatch(ctx context.Context, items []storage.Item) er
 
 		stmt := `
 		INSERT INTO news(title, description, pub_date, link)
-		VALUES ($1, $2, $3, $4);`
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (link) DO NOTHING;`
 
 		// добавляем все запросы в очередь
 		for i := range items {
@@ -144,11 +146,13 @@ func (p *Postgres) addItemsByCopy(ctx context.Context, items []storage.Item) err
 	})
 }
 
-// AddItem добавляет в БД rss-новость
+// AddItem добавляет в БД rss-новость, если новость уже
+// есть в БД, то no-op
 func (p *Postgres) AddItem(ctx context.Context, item storage.Item) error {
 	stmt := `
 		INSERT INTO news(title, description, pub_date, link)
-		VALUES ($1, $2, $3, $4);`
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (link) DO NOTHING;`
 
 	return p.exec(ctx, stmt, item.Title, item.Description, item.PubDate, item.Link)
 }
