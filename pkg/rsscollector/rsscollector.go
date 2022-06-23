@@ -69,7 +69,8 @@ func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []st
 				case <-time.After(interval):
 
 					v, err := c.poll(ctx, &container{}, url) // выполняем опрос
-					if err != nil {
+
+					if err != nil && err != context.DeadlineExceeded {
 						ec++
 						c.log.Printf("unit #%03d >> error=%v >> task: poll=%s", id, err, url)
 						errors <- err
@@ -93,7 +94,7 @@ func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []st
 // каналы в единый канал и возвращает этот канал
 func merge[T any](sources ...<-chan T) <-chan T {
 
-	dest := make(chan T) // единый канал
+	dest := make(chan T, len(sources)) // единый канал
 
 	var wg sync.WaitGroup
 	wg.Add(len(sources))
