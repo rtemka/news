@@ -70,9 +70,14 @@ func (i *Item) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	return nil
 }
 
-// для конвертирования из RFC1123Z
-// 'Mon, 02 Jan 2006 15:04:05 -0700' в unix timestamp
+// для конвертирования из RFC1123Z, RFC1123...
+// 'Mon, 02 Jan 2006 15:04:05 -0700' и подобных
+// в unix timestamp
 type unix int64
+
+var layouts = []string{time.RFC1123Z, time.RFC1123,
+	time.UnixDate, "02 Jan 2006 15:04:05 -0700", time.ANSIC,
+	time.RFC850, time.RFC822, time.RFC822Z}
 
 func (t *unix) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var s string
@@ -80,11 +85,16 @@ func (t *unix) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return err
 	}
 
-	pt, err := time.Parse(time.RFC1123Z, s)
-	if err != nil {
-		return err
+	var pt time.Time
+	var err error
+
+	for i := range layouts {
+		pt, err = time.Parse(layouts[i], s)
+		if err == nil {
+			break
+		}
 	}
 	*t = unix(pt.Unix())
 
-	return nil
+	return err
 }
