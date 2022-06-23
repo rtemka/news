@@ -3,6 +3,8 @@ package rsscollector
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -39,9 +41,9 @@ func Test_poller(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	poll := pollFunc(context.Background(), ts.URL)
+	poll := pollFunc()
 
-	c, err := poll(&container{})
+	c, err := poll(context.Background(), &container{}, ts.URL)
 	if err != nil {
 		t.Fatalf("poller() error = %v", err)
 	}
@@ -59,57 +61,75 @@ func Test_poller(t *testing.T) {
 	}
 }
 
-func TestPoll(t *testing.T) {
+func TestCollector_Poll(t *testing.T) {
 
-	var count int
+	var m sync.Mutex
+	var want int
+
+	timeout := 200 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		w.Header().Set("Content-Type", "text/xml")
-		fmt.Fprintln(w, xmlblob)
+
+		select {
+		case <-ctx.Done():
+			http.Error(w, "", http.StatusTeapot)
+		default:
+			m.Lock()
+			want++
+			m.Unlock()
+			w.Header().Set("Content-Type", "text/xml")
+			fmt.Fprintln(w, xmlblob)
+		}
+
 	}))
 	defer ts.Close()
 
+	collector := New(log.New(io.Discard, "", 0))
+
 	t.Run("oшибка_ноль_ссылок", func(t *testing.T) {
-		_, _, err := Poll(context.Background(), time.Second, nil)
+		_, _, err := collector.Poll(context.Background(), time.Second, nil)
 		if err == nil {
-			t.Fatal("Poll() expected error, got nothing")
+			t.Fatal("Collector.Poll() expected error, got nothing")
 		}
 	})
 
 	t.Run("подсчёт_количества_опросов", func(t *testing.T) {
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+		// контекст с небольшой задержкой, чтобы успеть прочитать
+		// все данные из канала при закрытии
+		ctx2, cancel2 := context.WithTimeout(context.Background(), timeout+(20*time.Millisecond))
+		defer cancel2()
 
-		values, errs, err := Poll(ctx, time.Second, []string{ts.URL})
+		values, errs, err := collector.Poll(ctx2, time.Millisecond,
+			[]string{ts.URL, ts.URL, ts.URL, ts.URL, ts.URL, ts.URL, ts.URL, ts.URL})
 		if err != nil {
-			t.Fatalf("Poll() error = %v", err)
+			t.Fatalf("Collector.Poll() error = %v", err)
 		}
 
 		var wg sync.WaitGroup
 		wg.Add(2)
 
-		gotv := 0
+		got := 0
 
 		go func() {
-			defer wg.Done()
-
 			for range values {
-				gotv++
+				got++
 			}
+			wg.Done()
 		}()
 
 		go func() {
-			defer wg.Done()
 			for range errs {
 			}
+			wg.Done()
 		}()
 
 		wg.Wait()
 
-		if gotv != count {
-			t.Fatalf("Poll() got values = %d, want values = %d", gotv, count)
+		if got != want {
+			t.Fatalf("Collector.Poll() got values = %d, want values = %d", got, want)
 		}
 	})
 }

@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
+	"log"
 	"mime"
 	"net/http"
 	"news/pkg/storage"
 	"sync"
 	"time"
+
+	"golang.org/x/net/html/charset"
 )
 
 // container - это наша зависимость, тип
@@ -16,11 +20,23 @@ import (
 type container = storage.ItemContainer
 type item = storage.Item
 
+type Collector struct {
+	log  *log.Logger
+	poll poller
+}
+
+func New(log *log.Logger) *Collector {
+	return &Collector{
+		log:  log,        // логгер
+		poll: pollFunc(), // функция опроса по ссылке
+	}
+}
+
 // Poll опрашивает переданные rss-ссылки c заданным интервалом времени.
-func Poll(ctx context.Context, interval time.Duration, links []string) (<-chan any, <-chan error, error) {
+func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []string) (<-chan any, <-chan error, error) {
 
 	if len(links) == 0 {
-		return nil, nil, fmt.Errorf("poll: no links provided")
+		return nil, nil, fmt.Errorf("collector poll: no links provided")
 	}
 
 	dests := make([]<-chan any, len(links))  // по каналу для каждой rss-ссылки
@@ -34,24 +50,31 @@ func Poll(ctx context.Context, interval time.Duration, links []string) (<-chan a
 		ech := make(chan error)
 		errs[i] = ech
 
-		go func(values chan<- any, errors chan<- error, url string) {
+		go func(id int, values chan<- any, errors chan<- error, url string) {
+
+			var ec uint // считаем ошибки во время работы горутины
+			var pc uint // считаем опросы горутины
 
 			defer func() {
+				c.log.Printf("unit #%03d >> totals: polls=%d errors=%d >> task: poll=%s",
+					id, pc, ec, url)
 				close(values)
 				close(errors)
 			}()
-
-			poll := pollFunc(ctx, url) // функция опроса по ссылке
 
 			for {
 
 				select {
 
 				case <-time.After(interval):
-					v, err := poll(&container{}) // выполняем опрос
+
+					v, err := c.poll(ctx, &container{}, url) // выполняем опрос
 					if err != nil {
+						ec++
+						c.log.Printf("unit #%03d >> error=%v >> task: poll=%s", id, err, url)
 						errors <- err
 					} else {
+						pc++
 						values <- v
 					}
 
@@ -60,7 +83,7 @@ func Poll(ctx context.Context, interval time.Duration, links []string) (<-chan a
 					return
 				}
 			}
-		}(ch, ech, links[i])
+		}(i, ch, ech, links[i])
 	}
 
 	return merge(dests...), merge(errs...), nil // Fan-In (демультиплексируем каналы)
@@ -111,24 +134,31 @@ func (f responseHandlerFunc) process(resp *http.Response) error {
 
 // poller - функция для опроса rss-канала,
 // тело ответа декодируется в переданный контейнер
-type poller func(container any) (any, error)
+type poller func(ctx context.Context, container any, url string) (any, error)
 
 // pollFunc создает функцию для опроса rss-канала по переданному URL
-func pollFunc(ctx context.Context, url string) poller {
+func pollFunc() poller {
 
-	rf := requestFunc(ctx, url) // функция для выполнения запроса по сети
+	return poller(func(ctx context.Context, container any, url string) (any, error) {
 
-	return func(container any) (any, error) {
+		request := requestFunc(ctx, url) // функция для выполнения запроса по сети
 
 		// логика декодирования тела ответа
 		decfunc := responseHandlerFunc(func(r *http.Response) error {
-			return xml.NewDecoder(r.Body).Decode(&container)
+			return decoderWithSettings(r.Body).Decode(&container)
 		})
 
 		chain := bodyCloser(statusChecker(decfunc)) // цепочка обработчиков ответа
 
-		return container, rf(chain)
-	}
+		return container, request(chain)
+
+	})
+}
+
+func decoderWithSettings(r io.Reader) *xml.Decoder {
+	decoder := xml.NewDecoder(r)
+	decoder.CharsetReader = charset.NewReaderLabel // некоторые rss-каналы возвращают не UTF-8
+	return decoder
 }
 
 type requester func(responseHandler) error
@@ -146,6 +176,9 @@ func requestFunc(ctx context.Context, url string) requester {
 		if err != nil {
 			return err
 		}
+		// чтобы rss-каналы не посылали нам ошибку 403
+		// ставим заголовок User-Agent
+		req.Header.Set("User-Agent", "Mozilla/5.0")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
