@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -34,7 +33,7 @@ func (i Item) String() string {
 }
 
 // ItemContainer - контейнер содержащий rss-новости.
-// Используется для декодирования xml и транспортировки по каналу
+// Используется для декодирования xml
 type ItemContainer struct {
 	Items []Item `xml:"channel>item"`
 }
@@ -98,46 +97,4 @@ func (t *unix) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	*t = unix(pt.Unix())
 
 	return err
-}
-
-type StreamWriter struct {
-	log     *log.Logger
-	storage Storage
-}
-
-func NewStreamWriter(log *log.Logger, storage Storage) *StreamWriter {
-	return &StreamWriter{
-		log:     log,
-		storage: storage,
-	}
-}
-
-func (sw *StreamWriter) WriteToStorage(ctx context.Context, in <-chan any) error {
-	var c, i uint // обработанные контейнеры, обработанные новости
-	var u uint    // неопознанные значения пришедшие в канал
-
-	for v := range in {
-
-		if container, ok := v.(*ItemContainer); ok {
-
-			dbctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			defer cancel()
-
-			err := sw.storage.AddItems(dbctx, container.Items)
-			if err != nil {
-				return err
-			}
-
-			c++
-			i += uint(len(container.Items))
-
-		} else {
-			u++
-		}
-
-	}
-
-	sw.log.Printf("totals: containers=%d, items=%d, unrecognized=%d", c, i, u)
-
-	return nil
 }
