@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime"
 	"net/http"
 	"news/pkg/storage"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,73 +21,93 @@ type container = storage.ItemContainer
 type item = storage.Item
 
 type Collector struct {
-	log  *log.Logger
-	poll poller
+	logger *log.Logger
+	poll   poller
+	// когда установлен в true, логгирует промежуточные итоги,
+	// по-умолчанию false
+	debugMode bool
 }
 
-func New(log *log.Logger) *Collector {
+func New(logger *log.Logger) *Collector {
 	return &Collector{
-		log:  log,        // логгер
-		poll: pollFunc(), // функция опроса по ссылке
+		logger:    logger,
+		poll:      poll, // функция опроса по ссылке
+		debugMode: false,
 	}
 }
 
+// DebugMode переключает debug режим у *Collector
+func (c *Collector) DebugMode(on bool) *Collector {
+	c.debugMode = on
+	return c
+}
+
 // Poll опрашивает переданные rss-ссылки c заданным интервалом времени.
-func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []string) (<-chan any, <-chan error, error) {
+func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []string) (<-chan container, <-chan error, error) {
 
 	if len(links) == 0 {
 		return nil, nil, fmt.Errorf("collector poll: no links provided")
 	}
 
-	dests := make([]<-chan any, len(links))  // по каналу для каждой rss-ссылки
-	errs := make([]<-chan error, len(links)) // каналы ошибок для каждой горутины
+	dests := make([]<-chan container, len(links)) // по каналу для каждой rss-ссылки
+	errs := make([]<-chan error, len(links))      // каналы ошибок для каждой горутины
 
 	// Fan-Out мультиплексируем каналы
 	for i := 0; i < len(links); i++ {
 
-		ch := make(chan any)
+		ch := make(chan container)
 		dests[i] = ch
 		ech := make(chan error)
 		errs[i] = ech
 
-		go func(id int, values chan<- any, errors chan<- error, url string) {
+		go func(id int, values chan<- container, errors chan<- error, url string) {
 
-			var ec uint // считаем ошибки во время работы горутины
-			var pc uint // считаем опросы горутины
+			var fails uint // считаем ошибки во время работы горутины
+			var polls uint // считаем опросы горутины
 
 			defer func() {
-				c.log.Printf("unit #%03d >> totals: polls=%d errors=%d >> task: poll=%s",
-					id, pc, ec, url)
+				c.logTotal(id, url, polls, fails) // лог общего итога
 				close(values)
 				close(errors)
 			}()
 
 			for {
-
 				select {
-
 				case <-time.After(interval):
 
-					v, err := c.poll(ctx, &container{}, url) // выполняем опрос
-
-					if err != nil && err != context.DeadlineExceeded {
-						ec++
-						c.log.Printf("unit #%03d >> error=%v >> task: poll=%s", id, err, url)
-						errors <- err
-					} else {
-						pc++
+					polls++
+					v, err := c.poll(ctx, url) // выполняем опрос
+					if err == nil {
 						values <- v
+					} else {
+						fails++
+						errors <- fmt.Errorf("rsscollector: poll: %w", err)
 					}
+
+					c.log(id, url, len(v.Items), err) // лог промежуточных итогов
 
 				case <-ctx.Done():
 					errors <- ctx.Err()
 					return
 				}
 			}
-		}(i, ch, ech, links[i])
+		}(i+1, ch, ech, links[i])
 	}
 
 	return merge(dests...), merge(errs...), nil // Fan-In (демультиплексируем каналы)
+}
+
+func (c *Collector) log(id int, url string, received int, err error) {
+	if err != nil {
+		c.logger.Printf("[ERROR] unit #%03d >> error=%v; task=%s", id, err, url)
+	}
+	if c.debugMode {
+		c.logger.Printf("[DEBUG] unit #%03d >> items_received=%03d task=%s", id, received, url)
+	}
+}
+
+func (c *Collector) logTotal(id int, url string, polls, errors uint) {
+	c.logger.Printf("[INFO] unit #%03d >> totals: polls=%d errors=%d >> task=%s", id, polls, errors, url)
 }
 
 // merge демультиплексирует(собирает) переданные
@@ -133,53 +153,52 @@ func (f responseHandlerFunc) process(resp *http.Response) error {
 	return f(resp)
 }
 
-// poller - функция для опроса rss-канала,
-// тело ответа декодируется в переданный контейнер
-type poller func(ctx context.Context, container any, url string) (any, error)
+// poller - функция для опроса rss-канала, возвращает прочитанное тело ответа
+type poller func(ctx context.Context, url string) (container, error)
 
-// pollFunc создает функцию для опроса rss-канала по переданному URL
-func pollFunc() poller {
+func poll(ctx context.Context, url string) (container, error) {
 
-	return poller(func(ctx context.Context, container any, url string) (any, error) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-		request := requestFunc(ctx, url) // функция для выполнения запроса по сети
+	req, err := http.NewRequestWithContext(c, http.MethodGet, url, nil)
+	if err != nil {
+		return container{}, err
+	}
+	// чтобы rss-каналы не посылали нам ошибку 403
+	// ставим заголовок User-Agent
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 
-		// логика декодирования тела ответа
-		decfunc := responseHandlerFunc(func(r *http.Response) error {
-			return decoderWithSettings(r.Body).Decode(&container)
-		})
+	request := requestFunc(req) // функция для выполнения запроса по сети
 
-		chain := bodyCloser(statusChecker(decfunc)) // цепочка обработчиков ответа
-
-		return container, request(chain)
-
+	var cont container
+	// функция чтения тела ответа
+	decfunc := responseHandlerFunc(func(r *http.Response) error {
+		return xmlDecoderWithSettings(r.Body).Decode(&cont)
 	})
+
+	chain := bodyCloser(statusChecker(xmlEnforcer(decfunc))) // цепочка обработчиков ответа
+
+	return cont, request(chain)
 }
 
-func decoderWithSettings(r io.Reader) *xml.Decoder {
+// decoderWithSettings возвращает *xml.Decoder с настройками
+func xmlDecoderWithSettings(r io.Reader) *xml.Decoder {
 	decoder := xml.NewDecoder(r)
 	decoder.CharsetReader = charset.NewReaderLabel // некоторые rss-каналы возвращают не UTF-8
 	return decoder
 }
 
+// requester выполняет стандартный http-запрос
+// и передает ответ обработчику responseHandler
 type requester func(responseHandler) error
 
 // requestFunc возвращает функцию requester, которая будет выполнять
 // стандартный http-запрос и передавать ответ обработчику,
 // который она принимает в качестве аргумента
-func requestFunc(ctx context.Context, url string) requester {
+func requestFunc(req *http.Request) requester {
 
 	return func(handler responseHandler) error {
-		c, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(c, http.MethodGet, url, nil)
-		if err != nil {
-			return err
-		}
-		// чтобы rss-каналы не посылали нам ошибку 403
-		// ставим заголовок User-Agent
-		req.Header.Set("User-Agent", "Mozilla/5.0")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -202,7 +221,7 @@ func bodyCloser(next responseHandler) responseHandler {
 func statusChecker(next responseHandler) responseHandler {
 	return responseHandlerFunc(func(resp *http.Response) error {
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("[%s] response code is %d", resp.Request.URL, resp.StatusCode)
+			return fmt.Errorf("statusChecker: response code is %d", resp.StatusCode)
 		}
 		return next.process(resp)
 	})
@@ -211,12 +230,8 @@ func statusChecker(next responseHandler) responseHandler {
 func xmlEnforcer(next responseHandler) responseHandler {
 	return responseHandlerFunc(func(resp *http.Response) error {
 		ct := resp.Header.Get("Content-Type")
-		mediatype, _, err := mime.ParseMediaType(ct)
-		if err != nil {
-			return err
-		}
-		if mediatype != "text/xml" {
-			return fmt.Errorf("[%s] Content-Type is not 'text/xml'", resp.Request.URL)
+		if !strings.Contains(ct, "xml") {
+			return fmt.Errorf("xmlEnforcer: Content-Type is '%s', want '...+xml", ct)
 		}
 		return next.process(resp)
 	})

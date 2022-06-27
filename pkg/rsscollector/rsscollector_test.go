@@ -25,7 +25,7 @@ const xmlblob = `
 		</rss>
 		`
 
-func Test_poller(t *testing.T) {
+func Test_poll(t *testing.T) {
 
 	want := item{
 		Id:          0,
@@ -41,23 +41,17 @@ func Test_poller(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	poll := pollFunc()
-
-	c, err := poll(context.Background(), &container{}, ts.URL)
+	got, err := poll(context.Background(), ts.URL)
 	if err != nil {
-		t.Fatalf("poller() error = %v", err)
+		t.Fatalf("poll() error = %v", err)
 	}
 
-	if got, ok := c.(*container); ok {
-		if len(got.Items) != 1 {
-			t.Fatalf("poller() got result length = %d, want = %d", len(got.Items), 1)
-		}
+	if len(got.Items) != 1 {
+		t.Fatalf("poll() got results = %d, want = %d", len(got.Items), 1)
+	}
 
-		if got.Items[0] != want {
-			t.Fatalf("poller() got = %v, want = %v", got, want)
-		}
-	} else {
-		t.Fatalf("poller() unexpected return type = %T", c)
+	if got.Items[0] != want {
+		t.Fatalf("poll() got = %v, want = %v", got, want)
 	}
 }
 
