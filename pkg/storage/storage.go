@@ -22,8 +22,8 @@ type Storage interface {
 type Item struct {
 	Id          int64  `json:"id" bson:"_id"`
 	Title       string `json:"title" bson:"title"`
-	PubDate     int64  `json:"pubDate" bson:"pubDate"`
-	Description string `json:"description" bson:"description"`
+	PubDate     int64  `json:"pubTime" bson:"pubDate"`
+	Description string `json:"content" bson:"description"`
 	Link        string `json:"link" bson:"link"`
 }
 
@@ -76,8 +76,8 @@ func (i *Item) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 type unix int64
 
 var layouts = []string{time.RFC1123Z, time.RFC1123,
-	time.UnixDate, "02 Jan 2006 15:04:05 -0700", time.ANSIC,
-	time.RFC850, time.RFC822, time.RFC822Z}
+	time.UnixDate, "02 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04:05 -0700",
+	time.ANSIC, time.RFC850, time.RFC822, time.RFC822Z}
 
 func (t *unix) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var s string
