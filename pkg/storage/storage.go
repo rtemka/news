@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"time"
+
+	strip "github.com/grokify/html-strip-tags-go"
 )
 
 // Storage - контракт на работу с БД
@@ -55,7 +57,7 @@ func (xi *xmlItem) toItem() Item {
 		Id:          0,
 		Title:       xi.Title,
 		PubDate:     int64(xi.PubDate),
-		Description: xi.Description,
+		Description: strip.StripTags(xi.Description),
 		Link:        xi.Link,
 	}
 }
