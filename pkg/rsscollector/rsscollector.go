@@ -73,21 +73,24 @@ func (c *Collector) Poll(ctx context.Context, interval time.Duration, links []st
 				close(errors)
 			}()
 
+			poll := func() {
+				polls++
+				v, err := c.poll(ctx, url) // выполняем опрос
+				if err == nil {
+					values <- v
+				} else {
+					fails++
+					errors <- fmt.Errorf("rsscollector: poll: %w", err)
+				}
+				c.log(id, url, len(v.Items), err) // лог промежуточных итогов
+			}
+
+			poll() // первый опрос сразу
+
 			for {
 				select {
 				case <-time.After(interval):
-
-					polls++
-					v, err := c.poll(ctx, url) // выполняем опрос
-					if err == nil {
-						values <- v
-					} else {
-						fails++
-						errors <- fmt.Errorf("rsscollector: poll: %w", err)
-					}
-
-					c.log(id, url, len(v.Items), err) // лог промежуточных итогов
-
+					poll()
 				case <-ctx.Done():
 					errors <- ctx.Err()
 					return
