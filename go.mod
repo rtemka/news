@@ -2,7 +2,10 @@ module news
 
 go 1.18
 
-require golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
+require (
+	github.com/gorilla/mux v1.8.0
+	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
+)
 
 require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -18,6 +21,6 @@ require (
 require (
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
