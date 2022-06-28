@@ -14,6 +14,7 @@ type item = storage.Item
 // stor - хранилище, в которое пишет streamwriter
 type stor = storage.Storage
 
+// StreamWriter пишет в БД, то что читает из канала
 type StreamWriter struct {
 	log     *log.Logger
 	storage storage.Storage
@@ -22,6 +23,7 @@ type StreamWriter struct {
 	debugMode bool
 }
 
+// NewStreamWriter возвращает новый объект *StreamWriter
 func NewStreamWriter(log *log.Logger, storage stor) *StreamWriter {
 	return &StreamWriter{
 		log:       log,
@@ -43,6 +45,9 @@ type Stats struct {
 	Errs       uint // полученные ошибки
 }
 
+// WriteToStorage пишет в БД поступающие данные из канала,
+// возвращает статистику своей работы и ошибку, если БД мертва
+// или все приходящие данные не удается записать
 func (sw *StreamWriter) WriteToStorage(ctx context.Context, in <-chan container) (Stats, error) {
 	var stats Stats
 	var threshold = cap(in)

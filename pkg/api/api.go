@@ -23,6 +23,7 @@ type Api struct {
 	debugMode bool
 }
 
+// Возвращает новый объект *Api
 func New(storage stor, logger *log.Logger) *Api {
 	api := Api{
 		r:         mux.NewRouter(),
@@ -34,6 +35,7 @@ func New(storage stor, logger *log.Logger) *Api {
 	return &api
 }
 
+// DebugMode переключает debug режим у *Api
 func (api *Api) DebugMode(mode bool) *Api {
 	api.debugMode = mode
 	return api
@@ -45,14 +47,14 @@ func (api *Api) Router() *mux.Router {
 }
 
 func (api *Api) endpoints() {
-	api.r.Use(api.HeadersMiddleware)
+	api.r.Use(api.headersMiddleware)
 	// получить n последних новостей
 	api.r.HandleFunc("/news/{n}", api.itemsHandler).Methods(http.MethodGet, http.MethodOptions)
 	// веб-приложение
 	api.r.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("./webapp"))))
 }
 
-func (api *Api) HeadersMiddleware(next http.Handler) http.Handler {
+func (api *Api) headersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)

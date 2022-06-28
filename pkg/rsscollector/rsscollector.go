@@ -20,6 +20,7 @@ import (
 type container = storage.ItemContainer
 type item = storage.Item
 
+// Collector объект для обхода rss-ссылок
 type Collector struct {
 	logger *log.Logger
 	poll   poller
@@ -28,6 +29,7 @@ type Collector struct {
 	debugMode bool
 }
 
+// Новый объект *Collector
 func New(logger *log.Logger) *Collector {
 	return &Collector{
 		logger:    logger,
