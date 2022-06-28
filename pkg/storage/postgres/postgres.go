@@ -28,8 +28,9 @@ func New(connString string) (*Postgres, error) {
 }
 
 // Close выполняет закрытие подключения к БД
-func (p *Postgres) Close() {
+func (p *Postgres) Close() error {
 	p.db.Close()
+	return nil
 }
 
 // Item находит по ссылке и возвращает rss-новость
