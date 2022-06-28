@@ -11,7 +11,7 @@ func New() *MemDB {
 	return &MemDB{}
 }
 
-var sampleItem = storage.Item{
+var SampleItem = storage.Item{
 	Id:          1,
 	PubDate:     5555555,
 	Title:       "sample item",
@@ -20,11 +20,15 @@ var sampleItem = storage.Item{
 }
 
 func (db *MemDB) Item(_ context.Context, _ string) (storage.Item, error) {
-	return sampleItem, nil
+	return SampleItem, nil
 }
 
-func (db *MemDB) Items(_ context.Context, _ int) ([]storage.Item, error) {
-	return []storage.Item{sampleItem, sampleItem}, nil
+func (db *MemDB) Items(_ context.Context, n int) ([]storage.Item, error) {
+	items := make([]storage.Item, 0, n)
+	for i := 0; i < n; i++ {
+		items = append(items, SampleItem)
+	}
+	return items, nil
 }
 
 func (db *MemDB) AddItem(_ context.Context, _ storage.Item) error {
