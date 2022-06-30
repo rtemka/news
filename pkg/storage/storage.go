@@ -7,6 +7,7 @@ import (
 	"time"
 
 	strip "github.com/grokify/html-strip-tags-go"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Storage - контракт на работу с БД
@@ -18,11 +19,12 @@ type Storage interface {
 
 // Item - модель данных rss-новости
 type Item struct {
-	Id          int64  `json:"id" bson:"_id"`
-	Title       string `json:"title" bson:"title"`
-	PubDate     int64  `json:"pubTime" bson:"pubDate"`
-	Description string `json:"content" bson:"description"`
-	Link        string `json:"link" bson:"link"`
+	Id          int64              `json:"id" bson:"-"`
+	Oid         primitive.ObjectID `json:"_id" bson:"_id,omitempty"`
+	Title       string             `json:"title" bson:"title"`
+	PubDate     int64              `json:"pubTime" bson:"pubDate"`
+	Description string             `json:"content" bson:"description"`
+	Link        string             `json:"link" bson:"link"`
 }
 
 func (i Item) String() string {
@@ -51,6 +53,7 @@ type xmlItem struct {
 func (xi *xmlItem) toItem() Item {
 	return Item{
 		Id:          0,
+		Oid:         primitive.NilObjectID,
 		Title:       xi.Title,
 		PubDate:     int64(xi.PubDate),
 		Description: strip.StripTags(xi.Description),
