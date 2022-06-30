@@ -92,7 +92,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	interval := time.Second * time.Duration(config.SurveyPeriod)
+	interval := time.Minute * time.Duration(config.SurveyPeriod)
 	values, errs, err := collector.Poll(ctx, interval, config.Links)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
