@@ -20,3 +20,43 @@
 | **8** | Сервер приложения должен предоставлять API, посредством которого осуществляется взаимодействие сервера и веб-интерфейса.|
 | **9** | API должен предоставлять метод для получения заданного количества новостей. Требуемое количество публикаций указывается в пути запроса метода API.|
 | **10** | Агрегатор должен хранить как минимум следующий набор данных для каждой публикации: **Заголовок (title)**, **Описание (description)**, **Дата публикации (pubDate)**, **Ссылка на источник (link)**|
+
+****
+#### **Использование**
+
+
+##### **Для прогона тестов:**
+```bash
+export POSTGRES_TEST_DB_URL="postgres://[user:password]@localhost:5432/[testdb-name]"
+```
+```bash
+export MONGO_TEST_DB_URL="mongodb://[user:password]@localhost:27017"
+```
+```bash
+go test -v ./...
+```
+
+##### **Настройка Базы данных**
+
+Для полноценного запуска приложения необходимо иметь на хост-машине установленный **Postgres/Mongodb**, а также **прописать переменные окружения** для подключения к БД.
+
+Для рабочей БД, например:
+```bash
+export NEWS_DB_CONN_STRING="postgres://[user:password]@host.docker.internal:5432/[db-name]"
+```
+... или 
+```bash
+export NEWS_DB_CONN_STRING="mongodb://[user:password]@host.docker.internal:27017"
+```
+
+**Схему** БД можно найти **[тут](pkg/storage/postgres/schema.sql)**
+
+##### **Docker**
+Собираем образ и запускаем контейнер
+
+```bash
+docker build -t gonews .
+```
+```bash
+docker run --rm -it -p 5432:5432 -p 27017:27017 -p 8080:8080 --env NEWS_DB_CONN_STRING --name gonews gonews
+```
