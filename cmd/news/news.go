@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"news/pkg/api"
 	"news/pkg/rsscollector"
+	"news/pkg/storage"
+	"news/pkg/storage/mongo"
 	"news/pkg/storage/postgres"
 	"news/pkg/storage/streamwriter"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -46,6 +49,16 @@ func readConfig(path string) (*config, error) {
 	return &c, json.NewDecoder(f).Decode(&c)
 }
 
+func connectToStorage(connstr string) (storage.Storage, error) {
+	if strings.Contains(connstr, "postgres") {
+		return postgres.New(connstr)
+	}
+	if strings.Contains(connstr, "mongodb") {
+		return mongo.New(connstr, "gonews", "news")
+	}
+	return nil, fmt.Errorf("cannot connect to storage with this url '%s'", connstr)
+}
+
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <path-to-config-file>\n", os.Args[0])
@@ -64,9 +77,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	db, err := postgres.New(connstr)
+	db, err := connectToStorage(connstr)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	defer db.Close()
