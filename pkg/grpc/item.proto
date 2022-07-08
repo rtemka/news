@@ -1,0 +1,26 @@
+syntax = "proto3";
+package newsgrpc;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/rtemka/news/pkg/grpc";
+
+service News {
+    rpc List(google.protobuf.Int64Value) returns (Items);
+} 
+
+message Item {
+    int64 id = 1;
+    bytes oid = 2;
+    string title = 3;
+    int64 pubTime = 4;
+    string content = 5;
+    string link = 6;
+}
+
+message Items {
+    repeated Item items = 1;
+}
+
+
+
