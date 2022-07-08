@@ -23,14 +23,23 @@
 ****
 #### **Использование**
 
+```bash
+git clone https://github.com/rtemka/news.git
+cd ./news
+```
 
 ##### **Для прогона тестов:**
+
 ```bash
 export POSTGRES_TEST_DB_URL="postgres://[user:password]@localhost:5432/[testdb-name]"
 ```
+
 ```bash
 export MONGO_TEST_DB_URL="mongodb://[user:password]@localhost:27017"
 ```
+
+Если эти переменные окружения не установлены, то тесты **будут пропущены**.
+
 ```bash
 go test -v ./...
 ```
@@ -54,8 +63,14 @@ export NEWS_DB_CONN_STRING="mongodb://[user:password]@host.docker.internal:27017
 Собираем образ и запускаем контейнер
 
 ```bash
-docker build -t gonews .
+docker build -t news .
 ```
 ```bash
-docker run --rm -it -p 5432:5432 -p 27017:27017 -p 8080:8080 --env NEWS_DB_CONN_STRING --name gonews gonews
+docker run --rm -it -p 5432:5432 -p 27017:27017 -p 8080:8080 --env NEWS_DB_CONN_STRING --name news news
+```
+
+##### **Из исходника**
+```bash
+go build -o ./cmd/news/news ./cmd/news/news.go
+./cmd/news/news ./cmd/news/config.json
 ```
