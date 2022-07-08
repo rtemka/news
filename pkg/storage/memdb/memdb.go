@@ -15,8 +15,9 @@ func New() *MemDB {
 // SampleItem можно использовать для тестов
 var SampleItem = storage.Item{
 	Id:          1,
-	PubDate:     5555555,
+	Oid:         [12]byte{},
 	Title:       "sample item",
+	PubDate:     5555555,
 	Description: "sample discription",
 	Link:        "https://test.com",
 }
