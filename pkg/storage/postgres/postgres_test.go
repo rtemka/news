@@ -11,6 +11,8 @@ import (
 
 var tdb *Postgres // тестовая БД
 
+const DbEnv = "POSTGRES_TEST_DB_URL"
+
 func restoreTestDB(testdb *Postgres) error {
 
 	b, err := os.ReadFile(filepath.Join("testdata", "testdb.sql"))
@@ -23,10 +25,9 @@ func restoreTestDB(testdb *Postgres) error {
 
 func TestMain(m *testing.M) {
 
-	connstr := os.Getenv("POSTGRES_TEST_DB_URL")
-	if connstr == "" {
-		fmt.Fprintln(os.Stderr, "environment variable POSTGRES_TEST_DB_URL must be set")
-		os.Exit(1)
+	connstr, ok := os.LookupEnv(DbEnv)
+	if !ok {
+		os.Exit(m.Run()) // тест будет пропущен
 	}
 
 	var err error
@@ -48,6 +49,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestPostgres(t *testing.T) {
+	if _, ok := os.LookupEnv(DbEnv); !ok {
+		t.Skipf("environment variable %s not set, skipping tests", DbEnv)
+	}
 
 	t.Run("AddItems()", func(t *testing.T) {
 		wantItems := []storage.Item{testItem1, testItem2, testItem3, testItem4}

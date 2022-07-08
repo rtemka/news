@@ -12,6 +12,7 @@ import (
 var tdb *Mongo // тестовая БД
 
 const (
+	DbEnv            = "MONGO_TEST_DB_URL"
 	testDbName       = "newstest"
 	testDbCollection = "news"
 )
@@ -47,11 +48,11 @@ func restoreTestDB(db *Mongo) error {
 
 func TestMain(m *testing.M) {
 
-	connstr, ok := os.LookupEnv("MONGO_TEST_DB_URL")
+	connstr, ok := os.LookupEnv(DbEnv)
 	if !ok {
-		fmt.Fprintln(os.Stderr, "environment variable MONGO_TEST_DB_URL must be set")
-		os.Exit(1)
+		os.Exit(m.Run()) // тест будет пропущен
 	}
+
 	var err error
 	tdb, err = New(connstr, testDbName, testDbCollection)
 	if err != nil {
@@ -73,6 +74,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestMongo(t *testing.T) {
+	if _, ok := os.LookupEnv(DbEnv); !ok {
+		t.Skipf("environment variable %s not set, skipping tests", DbEnv)
+	}
 
 	t.Run("DeleteItem()", func(t *testing.T) {
 
