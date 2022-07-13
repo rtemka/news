@@ -22,11 +22,15 @@ import (
 	"time"
 )
 
+const (
+	logIndent = 16
+)
+
 // имя подсистемы для логирования
 var (
-	rsscolName = fmt.Sprintf("%16s", "[RSS Collector] ")
-	dwName     = fmt.Sprintf("%16s", "[DB Writer] ")
-	apiName    = fmt.Sprintf("%16s", "[WEB API] ")
+	rsscolName = fmt.Sprintf("%*s", logIndent, "[RSS Collector] ")
+	dwName     = fmt.Sprintf("%*s", logIndent, "[DB Writer] ")
+	apiName    = fmt.Sprintf("%*s", logIndent, "[WEB API] ")
 )
 
 // config - структура для хранения конфигурации
@@ -56,7 +60,7 @@ func connectToStorage(connstr string) (storage.Storage, error) {
 	if strings.Contains(connstr, "mongodb") {
 		return mongo.New(connstr, "gonews", "news")
 	}
-	return nil, fmt.Errorf("cannot connect to storage with this url '%s'", connstr)
+	return nil, fmt.Errorf("cannot connect to storage: url %q", connstr)
 }
 
 func main() {
